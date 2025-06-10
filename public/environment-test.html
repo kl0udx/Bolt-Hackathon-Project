@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Environment Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .content {
+            padding: 24px;
+        }
+        
+        .test-section {
+            margin-bottom: 32px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafbfc;
+        }
+        
+        .test-section h2 {
+            margin: 0 0 16px 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #4ECDC4;
+            padding-bottom: 8px;
+        }
+        
+        .test-item {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            padding: 12px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+        
+        .test-item:hover {
+            transform: translateX(4px);
+        }
+        
+        .test-item.pass {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        
+        .test-item.fail {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .test-item.warn {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .test-item.pending {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+        }
+        
+        .test-status {
+            font-size: 1.2rem;
+            margin-right: 12px;
+            min-width: 24px;
+        }
+        
+        .test-details {
+            flex: 1;
+        }
+        
+        .test-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .test-message {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .manual-tests {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        
+        .test-button {
+            background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+        }
+        
+        .test-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .video-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        
+        .video-box {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .video-box video {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .video-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .summary {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 24px;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .summary-item {
+            text-align: center;
+            padding: 12px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .summary-label {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4ECDC4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .recommendations {
+            background: #e8f4f8;
+            border: 1px solid #4ECDC4;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .recommendations h3 {
+            margin: 0 0 12px 0;
+            color: #2c3e50;
+        }
+        
+        .recommendations ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .recommendations li {
+            margin: 6px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 WebRTC Environment Test</h1>
+            <p>Quick validation of WebRTC capabilities</p>
+        </div>
+        
+        <div class="content">
+            <div class="test-section">
+                <h2>🌐 Browser Tests</h2>
+                <div id="browser-tests"></div>
+            </div>
+            
+            <div class="test-section">
+                <h2>🎥 Media Tests</h2>
+                <button class="test-button" onclick="testCamera()">Test Camera</button>
+                <button class="test-button" onclick="testScreenShare()">Test Screen Share</button>
+                <div id="media-tests"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addTest(container, name, status, message) {
+            const div = document.createElement('div');
+            div.className = `test-item ${status}`;
+            div.innerHTML = `
+                <span style="margin-right: 12px;">${status === 'pass' ? '✅' : '❌'}</span>
+                <div>
+                    <strong>${name}</strong><br>
+                    <small>${message}</small>
+                </div>
+            `;
+            document.getElementById(container).appendChild(div);
+        }
+
+        // Run browser tests
+        if (typeof RTCPeerConnection !== 'undefined') {
+            addTest('browser-tests', 'WebRTC Support', 'pass', 'RTCPeerConnection available');
+        } else {
+            addTest('browser-tests', 'WebRTC Support', 'fail', 'RTCPeerConnection not supported');
+        }
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            addTest('browser-tests', 'getUserMedia', 'pass', 'Camera/microphone access available');
+        } else {
+            addTest('browser-tests', 'getUserMedia', 'fail', 'Media access not available');
+        }
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            addTest('browser-tests', 'Screen Sharing', 'pass', 'Screen sharing available');
+        } else {
+            addTest('browser-tests', 'Screen Sharing', 'fail', 'Screen sharing not available');
+        }
+
+        async function testCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                addTest('media-tests', 'Camera Test', 'pass', 'Camera access granted');
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                addTest('media-tests', 'Camera Test', 'fail', error.message);
+            }
+        }
+
+        async function testScreenShare() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                addTest('media-tests', 'Screen Share Test', 'pass', 'Screen sharing works');
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                addTest('media-tests', 'Screen Share Test', 'fail', error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

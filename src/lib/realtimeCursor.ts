@@ -307,6 +307,7 @@ export class CursorTracker {
   private handleMouseMove = (event: MouseEvent) => {
     if (!this.isActive) return;
     
+    // Use screen coordinates for mouse events (clientX/Y are screen-relative)
     const position = { x: event.clientX, y: event.clientY };
     debugLogger.trace('cursor', 'Mouse move', { position, target: (event.target as Element)?.nodeName });
     this.handleMovement(position);
@@ -315,6 +316,7 @@ export class CursorTracker {
   private handleClick = (event: MouseEvent) => {
     if (!this.isActive) return;
     
+    // Use screen coordinates for click events
     const position = { x: event.clientX, y: event.clientY };
     debugLogger.debug('cursor', 'Click event', { position, button: event.button });
     this.handleMovement(position, true); // Immediate update on click
@@ -323,6 +325,7 @@ export class CursorTracker {
   private handleTouchMove = (event: TouchEvent) => {
     if (!this.isActive || event.touches.length === 0) return;
     
+    // Use screen coordinates for touch events
     const touch = event.touches[0];
     const position = { x: touch.clientX, y: touch.clientY };
     debugLogger.trace('cursor', 'Touch move', { position, touchCount: event.touches.length });
@@ -420,6 +423,7 @@ export class CursorTracker {
     if (!this.isActive) return;
     
     debugLogger.startPerformanceTimer('cursor-update', 'cursor');
+    let timerEnded = false;
     
     try {
       this.lastUpdate = Date.now();
@@ -428,6 +432,8 @@ export class CursorTracker {
       if (!isFinite(position.x) || !isFinite(position.y)) {
         debugLogger.warn('cursor', 'Invalid coordinates detected', { position });
         debugLogger.trackCursorDropped();
+        debugLogger.endPerformanceTimer('cursor-update');
+        timerEnded = true;
         return;
       }
       
@@ -443,9 +449,12 @@ export class CursorTracker {
       }
       
       debugLogger.endPerformanceTimer('cursor-update');
+      timerEnded = true;
       
     } catch (error) {
-      debugLogger.endPerformanceTimer('cursor-update');
+      if (!timerEnded) {
+        debugLogger.endPerformanceTimer('cursor-update');
+      }
       debugLogger.trackCursorDropped();
       logCursorError('Send cursor update', error, { position, roomId: this.roomId });
       

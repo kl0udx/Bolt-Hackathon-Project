@@ -6,7 +6,7 @@ import { InfiniteCanvas } from './InfiniteCanvas';
 import { RoomService } from '../services/roomService';
 import { RoomDetailsResponse } from '../types/room';
 import { subscribeToRoomParticipants } from '../lib/supabase';
-import { CursorTracker } from '../lib/realtimeCursor';
+import { CursorTracker, subscribeToCursorUpdates } from '../lib/realtimeCursor';
 import type { CursorPosition } from '../services/cursorService';
 
 interface RoomViewProps {
@@ -25,6 +25,7 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
   
   // Cursor tracking state
   const cursorTrackerRef = useRef<CursorTracker | null>(null);
+  const cursorSubscriptionRef = useRef<any>(null);
   const [otherCursors, setOtherCursors] = useState<CursorPosition[]>([]);
 
   useEffect(() => {
@@ -55,10 +56,29 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
     // Start tracking
     tracker.start();
 
+    // Subscribe to cursor updates from other users
+    const cursorSubscription = subscribeToCursorUpdates(
+      roomDetails.room.id,
+      (cursor: CursorPosition) => {
+        setOtherCursors(prev => {
+          // Update or add the cursor
+          const updated = prev.filter(c => c.userId !== cursor.userId);
+          return [...updated, cursor];
+        });
+      },
+      userId
+    );
+    cursorSubscriptionRef.current = cursorSubscription;
+
     // Cleanup on unmount
     return () => {
       tracker.stop();
       cursorTrackerRef.current = null;
+      
+      if (cursorSubscriptionRef.current) {
+        cursorSubscriptionRef.current.unsubscribe();
+        cursorSubscriptionRef.current = null;
+      }
     };
   }, [roomDetails?.room.id, userId]);
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Users, Share2, LogOut, Loader2 } from 'lucide-react';
 import { ShareModal } from './ShareModal';
-import FloatingToolbar from './FloatingToolbar';
+import { FloatingToolbar } from './FloatingToolbar';
 import { InfiniteCanvas } from './InfiniteCanvas';
-import { AIResponseObject } from './AIResponseObject';
+import AIResponseObject from './AIResponseObject';
 import { RoomService } from '../services/roomService';
-import { RoomDetailsResponse } from '../types/room';
+import { RoomDetailsResponse, AIResponse } from '../types/room';
 import { subscribeToRoomParticipants } from '../lib/supabase';
 import { HybridCursorTracker } from '../lib/hybridCursorTracker';
 import type { CursorPosition } from '../services/cursorService';
@@ -17,16 +17,6 @@ interface RoomViewProps {
   roomCode: string;
   userId: string;
   onLeaveRoom: () => void;
-}
-
-interface AIResponse {
-  id: string;
-  content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  isExpanded: boolean;
 }
 
 export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
@@ -127,11 +117,15 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
   }, []);
 
   const loadRoomDetails = async () => {
+    console.log('Loading room details for room code:', roomCode);
     try {
+      console.log('Calling RoomService.getRoomDetails...');
       const details = await RoomService.getRoomDetails(roomCode);
+      console.log('Room details received:', details);
       setRoomDetails(details);
       setError('');
     } catch (err) {
+      console.error('Error loading room details:', err);
       setError(err instanceof Error ? err.message : 'Failed to load room details');
     } finally {
       setIsLoading(false);
@@ -190,76 +184,92 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
   };
 
   const handleToggleRecording = (duration?: number) => {
-    if (duration !== undefined) {
-      setRecordingDuration(duration);
-      if (duration === 0 && durationIntervalRef.current) {
-        // Stop the timer
+    console.log('RoomView: handleToggleRecording called with duration:', duration);
+    if (duration === 0) {
+      // Stop recording
+      console.log('RoomView: Stopping recording and timer');
+      setIsRecording(false);
+      if (durationIntervalRef.current) {
         window.clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = undefined;
-      } else if (duration > 0 && !durationIntervalRef.current) {
-        // Start the timer
+      }
+      setRecordingDuration(0);
+    } else if (duration === 1) {
+      // Start recording
+      console.log('RoomView: Starting recording and timer');
+      setIsRecording(true);
+      setRecordingDuration(0); // Reset duration when starting
+      if (!durationIntervalRef.current) {
+        console.log('RoomView: Setting up timer interval');
         durationIntervalRef.current = window.setInterval(() => {
-          setRecordingDuration(prev => prev + 1);
+          setRecordingDuration(prev => {
+            console.log('RoomView: Timer tick, new duration:', prev + 1);
+            return prev + 1;
+          });
         }, 1000);
       }
     }
-    setIsRecording(!isRecording);
+  };
+
+  // Add cleanup effect for recording timer
+  useEffect(() => {
+    return () => {
+      console.log('RoomView: Cleaning up timer on unmount');
+      if (durationIntervalRef.current) {
+        window.clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = undefined;
+      }
+    };
+  }, []);
+
+  // Add cleanup when recording modal is closed
+  const handleRecordingModalClose = () => {
+    console.log('RoomView: Cleaning up timer on modal close');
+    if (durationIntervalRef.current) {
+      window.clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = undefined;
+    }
+    setRecordingDuration(0);
+    setIsRecording(false);
   };
 
   const handleToggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
   }, []);
 
-  const handleAIResponse = (content: string) => {
-    // Position the response well above the chat input
-    const viewportWidth = window.innerWidth;
-    const canvasContainer = document.querySelector('.infinite-canvas-container');
-    const rect = canvasContainer?.getBoundingClientRect();
-    
-    // Calculate position relative to the canvas container
-    // Position horizontally centered, but vertically above the chat input with more space
-    const x = rect ? (viewportWidth - rect.left) / 2 : viewportWidth / 2;
-    // Position 400px above bottom to account for chat input (96px) + toolbar (48px) + extra space
-    const y = rect ? (window.innerHeight - rect.top - 400) : window.innerHeight - 400;
-
+  const handleAIResponse = (response: { content: string; fromUserId: string }) => {
     const newResponse: AIResponse = {
-      id: Date.now().toString(),
-      content,
-      x,
-      y,
-      width: 400,
-      height: 300,
-      isExpanded: false
+      id: crypto.randomUUID(),
+      content: response.content,
+      position: {
+        x: window.innerWidth / 2 - 200, // Center horizontally
+        y: window.innerHeight - 300 // Position above chat input
+      },
+      rotation: 0,
+      zIndex: aiResponses.length + 1,
+      fromUserId: response.fromUserId
     };
     setAIResponses(prev => [...prev, newResponse]);
   };
 
-  const handleMoveResponse = (id: string, x: number, y: number) => {
+  const handleMoveResponse = (id: string, position: { x: number; y: number }) => {
     setAIResponses(prev =>
       prev.map(response =>
-        response.id === id ? { ...response, x, y } : response
+        response.id === id ? { ...response, x: position.x, y: position.y } : response
       )
     );
   };
 
-  const handleResizeResponse = (id: string, width: number, height: number) => {
+  const handleResizeResponse = (id: string, size: { width: number; height: number }) => {
     setAIResponses(prev =>
       prev.map(response =>
-        response.id === id ? { ...response, width, height } : response
+        response.id === id ? { ...response, width: size.width, height: size.height } : response
       )
     );
   };
 
   const handleCloseResponse = (id: string) => {
     setAIResponses(prev => prev.filter(response => response.id !== id));
-  };
-
-  const handleToggleExpandResponse = (id: string) => {
-    setAIResponses(prev =>
-      prev.map(response =>
-        response.id === id ? { ...response, isExpanded: !response.isExpanded } : response
-      )
-    );
   };
 
   if (isLoading) {
@@ -398,14 +408,18 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
           onCursorUpdate={(cursors) => setOtherCursors(cursors)}
         >
           {/* AI Response Objects */}
-          {aiResponses.map(response => (
+          {aiResponses.map((response) => (
             <AIResponseObject
               key={response.id}
-              {...response}
+              id={response.id}
+              content={response.content}
+              position={response.position}
+              rotation={response.rotation}
+              zIndex={response.zIndex}
+              fromUserId={response.fromUserId}
               onMove={handleMoveResponse}
               onResize={handleResizeResponse}
               onClose={handleCloseResponse}
-              onToggleExpand={handleToggleExpandResponse}
             />
           ))}
         </InfiniteCanvas>
@@ -428,6 +442,7 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
         roomId={roomDetails?.room.id}
         userId={userId}
         onAIResponse={handleAIResponse}
+        recordingDuration={recordingDuration}
       />
     </div>
   );

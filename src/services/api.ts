@@ -128,10 +128,14 @@ class ApiService {
   }
 
   async getRoomDetails(roomCode: string): Promise<RoomDetailsResponse> {
+    console.log('ApiService.getRoomDetails called with roomCode:', roomCode);
     return this.callWithFallback(
       // Edge function approach
       async () => {
-        const response = await fetch(`${API_BASE}/get-room?roomCode=${encodeURIComponent(roomCode)}`, {
+        console.log('Attempting edge function approach...');
+        const url = `${API_BASE}/get-room?roomCode=${encodeURIComponent(roomCode)}`;
+        console.log('Fetching from URL:', url);
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
@@ -139,14 +143,18 @@ class ApiService {
 
         if (!response.ok) {
           const error = await response.json();
+          console.error('Edge function failed:', error);
           throw new Error(error.error || 'Failed to get room details');
         }
 
-        return response.json();
+        const data = await response.json();
+        console.log('Edge function succeeded:', data);
+        return data;
       },
       
       // Direct Supabase fallback
       async () => {
+        console.log('Attempting direct Supabase fallback...');
         // Get room details
         const { data: room, error: roomError } = await supabase
           .from('rooms')
@@ -156,11 +164,15 @@ class ApiService {
           .single();
 
         if (roomError || !room) {
+          console.error('Supabase room query failed:', roomError);
           throw new Error('Room not found or expired');
         }
 
+        console.log('Room found:', room);
+
         // Check if room is expired
         if (new Date(room.expires_at) < new Date()) {
+          console.log('Room is expired, marking as inactive');
           await supabase
             .from('rooms')
             .update({ is_active: false })
@@ -175,10 +187,13 @@ class ApiService {
           .eq('room_id', room.id);
 
         if (participantsError) {
+          console.error('Supabase participants query failed:', participantsError);
           throw new Error('Failed to load participants');
         }
 
-        return {
+        console.log('Participants found:', participants);
+
+        const response = {
           room: {
             id: room.id,
             roomCode: room.room_code,
@@ -195,6 +210,9 @@ class ApiService {
             isOnline: p.is_online
           }))
         };
+
+        console.log('Supabase fallback succeeded:', response);
+        return response;
       }
     );
   }

@@ -92,3 +92,15 @@ export interface CreateInviteLinkResponse {
   inviteHash: string;
   expiresAt?: string;
 }
+
+export interface AIResponse {
+  id: string;
+  content: string;
+  position: {
+    x: number;
+    y: number;
+  };
+  rotation: number;
+  fromUserId: string;
+  zIndex: number;
+}

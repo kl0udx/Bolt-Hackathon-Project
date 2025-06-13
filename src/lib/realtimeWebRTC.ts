@@ -159,6 +159,8 @@ export class WebRTCSignalingManager {
   private isPollingActive = false;
   private consecutivePollingErrors = 0;
   private lastPollingSuccess = Date.now();
+  private dataChannels = new Map<string, RTCDataChannel>();
+  private dataMessageHandler: ((fromUserId: string, message: string) => void) | null = null;
 
   constructor(roomId: string, userId: string) {
     this.roomId = roomId;
@@ -197,6 +199,11 @@ export class WebRTCSignalingManager {
     });
     
     this.startHeartbeat();
+
+    // Expose a global test function for sending messages
+    (window as any).sendTestDataChannelMessage = (toUserId: string, message: string) => {
+      this.sendDataMessage(toUserId, message);
+    };
   }
 
   setOnRemoteStream(callback: (stream: MediaStream, userId: string) => void) {
@@ -401,7 +408,7 @@ export class WebRTCSignalingManager {
       existingPc.close();
     }
 
-    const pc = this.createPeerConnection(targetUserId);
+    const pc = this.createPeerConnection(targetUserId, true);
     this.peerConnections.set(targetUserId, pc);
 
     // Add local stream tracks
@@ -440,7 +447,7 @@ export class WebRTCSignalingManager {
         existingPc.close();
       }
 
-      const pc = this.createPeerConnection(fromUserId);
+      const pc = this.createPeerConnection(fromUserId, false);
       this.peerConnections.set(fromUserId, pc);
 
       await pc.setRemoteDescription(offer);
@@ -490,7 +497,7 @@ export class WebRTCSignalingManager {
     }
   }
 
-  private createPeerConnection(userId: string): RTCPeerConnection {
+  private createPeerConnection(userId: string, isInitiator: boolean = false): RTCPeerConnection {
     console.log(`🔗 Creating peer connection for ${userId}`);
     
     // Get network information for adaptive configuration
@@ -509,6 +516,19 @@ export class WebRTCSignalingManager {
     });
     
     const pc = new RTCPeerConnection(adaptiveConfig);
+
+    // Data channel support
+    if (isInitiator) {
+      const dataChannel = pc.createDataChannel('chat-ai-data');
+      this.dataChannels.set(userId, dataChannel);
+      this.attachDataChannelHandlers(userId, dataChannel);
+    } else {
+      pc.ondatachannel = (event) => {
+        const dataChannel = event.channel;
+        this.dataChannels.set(userId, dataChannel);
+        this.attachDataChannelHandlers(userId, dataChannel);
+      };
+    }
 
     // Handle remote stream
     pc.ontrack = (event) => {
@@ -964,5 +984,39 @@ export class WebRTCSignalingManager {
     this.lastHeartbeat.clear();
     
     console.log('✅ Enhanced cleanup completed');
+  }
+
+  // Send a message over the data channel to a specific peer
+  sendDataMessage(toUserId: string, message: string) {
+    const channel = this.dataChannels.get(toUserId);
+    if (channel && channel.readyState === 'open') {
+      channel.send(message);
+    } else {
+      console.warn(`Data channel to ${toUserId} is not open.`);
+    }
+  }
+
+  // Register a handler for incoming data messages
+  setDataMessageHandler(handler: (fromUserId: string, message: string) => void) {
+    this.dataMessageHandler = handler;
+    // Attach handler to all existing channels
+    this.dataChannels.forEach((channel, userId) => {
+      channel.onmessage = (event) => {
+        handler(userId, event.data);
+      };
+    });
+  }
+
+  private attachDataChannelHandlers(userId: string, channel: RTCDataChannel) {
+    // Log when a data channel is created
+    console.log(`[WebRTC] Data channel created with ${userId}`);
+    // Attach message handler if set
+    channel.onmessage = (event) => {
+      console.log(`[WebRTC] Data channel message from ${userId}:`, event.data);
+      if (this.dataMessageHandler) {
+        this.dataMessageHandler(userId, event.data);
+      }
+    };
+    // Optionally, handle open/close/error events here
   }
 }

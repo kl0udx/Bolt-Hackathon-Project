@@ -58,7 +58,7 @@ export function InfiniteCanvas({ roomId, userId, currentUser, children, onMouseM
     e.preventDefault();
     const zoomFactor = 1 - e.deltaY * 0.0003; // Much more reduced sensitivity
     setTransform(prev => {
-      const newScale = Math.max(0.8, Math.min(5, prev.scale * zoomFactor)); // Min zoom 0.8 - no grey area
+      const newScale = Math.max(1.0, Math.min(5, prev.scale * zoomFactor));
       const scaleChange = newScale / prev.scale;
       const newX = e.clientX - (e.clientX - prev.x) * scaleChange;
       const newY = e.clientY - (e.clientY - prev.y) * scaleChange;
@@ -143,7 +143,7 @@ export function InfiniteCanvas({ roomId, userId, currentUser, children, onMouseM
       </div>
       
       {/* CURRENT USER'S CURSOR - Fixed position relative to viewport */}
-      {currentUser && currentCursorPos && (
+      {currentCursorPos && currentUser && (
         <div
           className="fixed pointer-events-none"
           style={{
@@ -173,7 +173,7 @@ export function InfiniteCanvas({ roomId, userId, currentUser, children, onMouseM
       )}
       
       {/* INFINITE CANVAS CONTENT */}
-      <div 
+      <div
         className="absolute bg-white"
         style={{
           width: '25000px',
@@ -192,20 +192,8 @@ export function InfiniteCanvas({ roomId, userId, currentUser, children, onMouseM
           boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.2)'
         }}
       >
-        {/* CENTER MARKER */}
-        <div 
-          className="absolute bg-blue-500 text-white p-4 rounded-lg font-bold"
-          style={{
-            left: '12500px',
-            top: '12500px',
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          ∞ CANVAS CENTER ∞
-        </div>
-        
         {/* OTHER USERS' CURSORS - Canvas coordinates */}
-        {otherCursors.map((cursor) => (
+        {otherCursors.map(cursor => (
           <div
             key={cursor.userId}
             className="absolute pointer-events-none"

@@ -7,7 +7,15 @@ export class RoomService {
   }
 
   static async getRoomDetails(roomCode: string): Promise<RoomDetailsResponse> {
-    return apiService.getRoomDetails(roomCode);
+    console.log('RoomService.getRoomDetails called with roomCode:', roomCode);
+    try {
+      const details = await apiService.getRoomDetails(roomCode);
+      console.log('RoomService.getRoomDetails succeeded:', details);
+      return details;
+    } catch (error) {
+      console.error('RoomService.getRoomDetails failed:', error);
+      throw error;
+    }
   }
 
   static async joinRoom(roomCode: string, request: JoinRoomRequest): Promise<JoinRoomResponse> {

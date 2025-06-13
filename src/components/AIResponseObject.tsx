@@ -1,225 +1,200 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { Participant } from '../services/participantService';
+import { ParticipantService } from '../services/participantService';
 
 interface AIResponseObjectProps {
   id: string;
   content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  onMove: (id: string, x: number, y: number) => void;
-  onResize: (id: string, width: number, height: number) => void;
+  position: { x: number; y: number };
+  rotation: number;
+  zIndex: number;
+  fromUserId: string;
+  onMove: (id: string, position: { x: number; y: number }) => void;
+  onResize: (id: string, size: { width: number; height: number }) => void;
   onClose: (id: string) => void;
-  isExpanded: boolean;
-  onToggleExpand: (id: string) => void;
 }
 
-export function AIResponseObject({
+const AIResponseObject: React.FC<AIResponseObjectProps> = ({
   id,
   content,
-  x,
-  y,
-  width,
-  height,
+  position,
+  rotation,
+  zIndex,
+  fromUserId,
   onMove,
   onResize,
-  onClose,
-  isExpanded,
-  onToggleExpand
-}: AIResponseObjectProps) {
+  onClose
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragInfo = useRef({
-    startX: 0,
-    startY: 0,
-    offsetX: 0,
-    offsetY: 0
-  });
+  const [size, setSize] = useState({ width: 300, height: 200 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [participant, setParticipant] = useState<Participant | null>(null);
+  const elementRef = useRef<HTMLDivElement>(null);
 
-  // Convert screen coordinates to canvas coordinates
-  const canvasX = x + 12500; // Add center offset
-  const canvasY = y + 12500; // Add center offset
+  useEffect(() => {
+    const fetchParticipant = async () => {
+      const participantData = await ParticipantService.getParticipant(fromUserId);
+      if (participantData) {
+        setParticipant(participantData);
+      }
+    };
+    fetchParticipant();
+  }, [fromUserId]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only start dragging if clicking on the header or content area
-    const target = e.target as HTMLElement;
-    const isHeader = target.closest('.ai-response-header');
-    const isContent = target.closest('.ai-response-content');
-    const isButton = target.closest('button');
-    
-    if ((isHeader || isContent) && !isButton) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        // Store the initial mouse position and offset
-        dragInfo.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          offsetX: e.clientX - rect.left,
-          offsetY: e.clientY - rect.top
-        };
-        setIsDragging(true);
-      }
+    if (e.target instanceof HTMLElement && e.target.closest('.resize-handle')) {
+      handleResizeStart(e);
+    } else {
+      handleDragStart(e);
     }
+  };
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only handle left mouse button
+    setIsDragging(true);
+    const rect = elementRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
+  };
+
+  const handleDragMove = (e: MouseEvent) => {
+    if (!isDragging || !elementRef.current) return;
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
+    onMove(id, { x: newX, y: newY });
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('mouseup', handleDragEnd);
   };
 
   const handleResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    if (e.button !== 0) return;
     setIsResizing(true);
-    dragInfo.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      offsetX: 0,
-      offsetY: 0
-    };
+    const rect = elementRef.current?.getBoundingClientRect();
+    if (rect) {
+      setResizeStart({
+        x: e.clientX,
+        y: e.clientY,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging && containerRef.current) {
-      const canvasContainer = document.querySelector('.infinite-canvas-container');
-      const canvasRect = canvasContainer?.getBoundingClientRect();
-      
-      if (canvasRect) {
-        // Calculate new position keeping the cursor at the same relative position
-        const newX = e.clientX - dragInfo.current.offsetX - canvasRect.left + (width / 2);
-        const newY = e.clientY - dragInfo.current.offsetY - canvasRect.top + (height / 2);
-        
-        // Update position immediately
-        containerRef.current.style.left = `${newX + 12500 - (width / 2)}px`;
-        containerRef.current.style.top = `${newY + 12500 - (height / 2)}px`;
-      }
-    } else if (isResizing) {
-      const deltaX = e.clientX - dragInfo.current.startX;
-      const deltaY = e.clientY - dragInfo.current.startY;
-      const newWidth = Math.max(300, width + deltaX);
-      const newHeight = Math.max(200, height + deltaY);
-      onResize(id, newWidth, newHeight);
-    }
+  const handleResizeMove = (e: MouseEvent) => {
+    if (!isResizing) return;
+    const deltaX = e.clientX - resizeStart.x;
+    const deltaY = e.clientY - resizeStart.y;
+    const newWidth = Math.max(200, resizeStart.width + deltaX);
+    const newHeight = Math.max(150, resizeStart.height + deltaY);
+    setSize({ width: newWidth, height: newHeight });
+    onResize(id, { width: newWidth, height: newHeight });
   };
 
-  const handleMouseUp = () => {
-    if (isDragging && containerRef.current) {
-      const canvasContainer = document.querySelector('.infinite-canvas-container');
-      const canvasRect = canvasContainer?.getBoundingClientRect();
-      
-      if (canvasRect) {
-        // Calculate final position
-        const rect = containerRef.current.getBoundingClientRect();
-        const finalX = rect.left - canvasRect.left - (width / 2);
-        const finalY = rect.top - canvasRect.top - (height / 2);
-        onMove(id, finalX, finalY);
-      }
-    }
-    setIsDragging(false);
+  const handleResizeEnd = () => {
     setIsResizing(false);
+    document.removeEventListener('mousemove', handleResizeMove);
+    document.removeEventListener('mouseup', handleResizeEnd);
+  };
+
+  const handleClose = () => {
+    onClose(id);
   };
 
   useEffect(() => {
-    if (isDragging || isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, isResizing]);
+    return () => {
+      document.removeEventListener('mousemove', handleDragMove);
+      document.removeEventListener('mouseup', handleDragEnd);
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+    };
+  }, []);
 
   return (
     <div
-      ref={containerRef}
-      className="absolute bg-white rounded-lg shadow-2xl border-2 border-blue-200 overflow-hidden"
+      ref={elementRef}
+      className="absolute"
       style={{
-        left: canvasX - (width / 2),
-        top: canvasY - (height / 2),
-        width: isExpanded ? '80vw' : width,
-        height: isExpanded ? '80vh' : height,
+        left: position.x,
+        top: position.y,
+        width: size.width,
+        height: size.height,
+        transform: `rotate(${isHovered ? 0 : rotation}deg)`,
+        transformOrigin: 'center center',
+        zIndex: isHovered ? 1000 : zIndex,
+        transition: isDragging || isResizing ? 'none' : 'all 0.2s ease-in-out',
+        boxShadow: isHovered 
+          ? '0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1)'
+          : '0 4px 16px rgba(0, 0, 0, 0.1)',
         cursor: isDragging ? 'grabbing' : 'grab',
-        zIndex: 1000,
-        background: 'linear-gradient(to bottom, #ffffff, #f8fafc)',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(59, 130, 246, 0.1)',
-        touchAction: 'none',
-        userSelect: 'none'
+        backgroundColor: participant?.userColor || '#ffffff'
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onMouseDown={handleMouseDown}
     >
-      {/* Header - Now with a gradient background */}
       <div 
-        className="ai-response-header flex items-center justify-between p-3 border-b border-blue-100 cursor-grab active:cursor-grabbing"
+        className="h-8 flex items-center justify-between px-3 rounded-t-lg"
         style={{
-          background: 'linear-gradient(to right, #f0f9ff, #e0f2fe)'
+          backgroundColor: participant?.userColor 
+            ? `${participant.userColor}dd` // Add transparency
+            : 'rgba(0, 0, 0, 0.1)'
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-sm font-medium text-blue-700">AI Response</span>
-          <span className="text-xs text-blue-500">(Drag to move)</span>
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: participant?.userColor || '#000000' }} />
+          <span className="text-sm font-medium text-white">
+            {participant?.displayName || 'Unknown User'}
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onToggleExpand(id)}
-            className="p-1.5 text-blue-600 hover:text-blue-800 rounded hover:bg-blue-50 transition-colors"
-            title={isExpanded ? "Minimize" : "Maximize"}
+            onClick={handleClose}
+            className="p-1 rounded-full hover:bg-white/20 transition-colors"
           >
-            {isExpanded ? (
-              <Minimize2 className="w-4 h-4" />
-            ) : (
-              <Maximize2 className="w-4 h-4" />
-            )}
-          </button>
-          <button
-            onClick={() => onClose(id)}
-            className="p-1.5 text-blue-600 hover:text-blue-800 rounded hover:bg-blue-50 transition-colors"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       </div>
-
-      {/* Content - With a subtle background */}
       <div 
-        className="ai-response-content p-4 overflow-auto cursor-grab active:cursor-grabbing" 
+        className="p-4 overflow-auto"
         style={{ 
-          height: 'calc(100% - 40px)',
-          background: 'linear-gradient(to bottom, #ffffff, #f8fafc)'
+          height: `calc(100% - 2rem)`,
+          backgroundColor: participant?.userColor 
+            ? `${participant.userColor}22` // Very light color
+            : '#ffffff'
         }}
       >
-        <div className="prose prose-sm max-w-none prose-blue">
+        <div className="prose prose-sm max-w-none">
           {content}
         </div>
       </div>
-
-      {/* Resize Handle - More visible */}
-      {!isExpanded && (
-        <div
-          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center"
-          onMouseDown={handleResizeStart}
-          title="Drag to resize"
-        >
-          <div className="w-4 h-4 border-b-2 border-r-2 border-blue-300" />
-        </div>
-      )}
-
-      {/* Movement Hint - Shows briefly on hover */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-0 hover:opacity-100 transition-opacity duration-200"
-        style={{
-          background: 'linear-gradient(45deg, rgba(59, 130, 246, 0.05) 25%, transparent 25%, transparent 50%, rgba(59, 130, 246, 0.05) 50%, rgba(59, 130, 246, 0.05) 75%, transparent 75%, transparent)',
-          backgroundSize: '20px 20px'
-        }}
+        className="resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+        onMouseDown={handleResizeStart}
       >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full text-sm font-medium shadow-lg">
-            Drag to move • Resize from corner
-          </div>
-        </div>
+        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16l8-8M8 8h8v8" />
+        </svg>
       </div>
     </div>
   );
-} 
+};
+
+export default AIResponseObject; 

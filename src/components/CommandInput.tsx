@@ -1,77 +1,87 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send } from 'lucide-react';
 
 interface CommandInputProps {
-  isOpen: boolean;
+  onSubmit: (message: string) => void;
   onClose: () => void;
-  onSend: (message: string) => void;
-  placeholder?: string;
+  roomId: string;
+  userId: string;
+  isLocked?: boolean;
+  lockedBy?: string | null;
 }
 
-export function CommandInput({ isOpen, onClose, onSend, placeholder = "Ask AI anything..." }: CommandInputProps) {
-  const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+export const CommandInput: React.FC<CommandInputProps> = ({
+  onSubmit,
+  onClose,
+  roomId,
+  userId,
+  isLocked = false,
+  lockedBy = null
+}) => {
+  const [message, setMessage] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isOpen]);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) {
-      onSend(input.trim());
-      setInput('');
-      onClose();
-    }
+    if (!message.trim() || isLocked) return;
+    onSubmit(message.trim());
+    setMessage('');
+    onClose();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Escape') {
       onClose();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (message.trim() && !isLocked) {
+        handleSubmit(e as unknown as React.FormEvent);
+      }
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-2xl px-4 z-50">
-      <form 
+    <div
+      className="fixed z-50 left-1/2 bottom-24 transform -translate-x-1/2 flex flex-col items-center w-full"
+      style={{ minWidth: 0 }}
+    >
+      <form
         onSubmit={handleSubmit}
-        className="relative bg-white rounded-lg shadow-xl border border-gray-200"
+        className="flex items-center w-full max-w-3xl bg-white rounded-lg shadow border border-gray-200 px-4 py-3"
+        style={{ minWidth: 420, maxWidth: 700 }}
       >
-        <textarea
+        <input
           ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          type="text"
+          value={message}
+          onChange={e => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className="w-full p-4 pr-12 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[60px] max-h-[200px]"
-          style={{ 
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-          }}
+          placeholder={isLocked ? (lockedBy ? `Locked by ${lockedBy}` : 'Input locked') : 'Ask the AI assistant…'}
+          disabled={isLocked}
+          className="flex-1 bg-transparent outline-none border-none text-lg placeholder-gray-400 px-4 h-14"
+          style={{ minWidth: 0 }}
         />
-        <div className="absolute right-2 bottom-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <button
-            type="submit"
-            disabled={!input.trim()}
-            className="p-2 text-blue-500 hover:text-blue-600 rounded-full hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={!message.trim() || isLocked}
+          className="ml-2 p-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center h-12 w-12"
+        >
+          <Send className="w-6 h-6" />
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-1 px-3 py-2 text-gray-400 hover:text-gray-700 text-base bg-transparent border-none rounded-lg"
+        >
+          Cancel
+        </button>
       </form>
     </div>
   );
-} 
+}; 

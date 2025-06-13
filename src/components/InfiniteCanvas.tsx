@@ -1,18 +1,32 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import type { CursorPosition } from '../services/cursorService';
 
-// CursorTracker interface for TypeScript
-interface CursorTracker {
+// HybridCursorTracker interface for TypeScript
+interface HybridCursorTracker {
   updatePosition: (position: { x: number; y: number }) => void;
-  // Add other methods as needed
+  isUsingWebRTC: () => boolean;
+  getConnectionStatus: () => {
+    webrtcConnected: boolean;
+    usingFallback: boolean;
+    activeChannels: number;
+    averageLatency: number;
+  };
+}
+
+interface CurrentUser {
+  userId: string;
+  displayName: string;
+  userColor: string;
+  avatarEmoji?: string;
 }
 
 interface InfiniteCanvasProps {
   roomId: string;
   userId: string;
+  currentUser?: CurrentUser;
   children?: React.ReactNode;
   onMouseMove?: (screenCoords: { x: number; y: number }, canvasCoords: { x: number; y: number }) => void;
-  cursorTracker?: CursorTracker | null;
+  cursorTracker?: HybridCursorTracker | null;
   otherCursors?: CursorPosition[];
   onCursorUpdate?: (cursors: CursorPosition[]) => void;
 }
@@ -23,13 +37,22 @@ interface Transform {
   scale: number;
 }
 
-export function InfiniteCanvas({ roomId, userId, children, onMouseMove, cursorTracker }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ roomId, userId, currentUser, children, onMouseMove, cursorTracker, otherCursors = [] }: InfiniteCanvasProps) {
   console.log('🚀 InfiniteCanvas rendering');
   
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  const [currentCursorPos, setCurrentCursorPos] = useState<{ x: number; y: number } | null>(null);
+  
+  // Get connection status for debug display
+  const connectionStatus = cursorTracker?.getConnectionStatus() || {
+    webrtcConnected: false,
+    usingFallback: true,
+    activeChannels: 0,
+    averageLatency: 0
+  };
   
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -58,9 +81,21 @@ export function InfiniteCanvas({ roomId, userId, children, onMouseMove, cursorTr
       setTransform(prev => ({ ...prev, x: prev.x + deltaX, y: prev.y + deltaY }));
       setLastPanPoint({ x: e.clientX, y: e.clientY });
     }
+    
+    // Calculate canvas coordinates for database storage
+    const canvasX = (e.clientX - transform.x) / transform.scale + 12500; // Add center offset
+    const canvasY = (e.clientY - transform.y) / transform.scale + 12500; // Add center offset
+    
+    // Use screen coordinates for cursor display (where the mouse actually is)
+    const rect = containerRef.current?.getBoundingClientRect();
+    const screenX = rect ? e.clientX - rect.left : e.clientX;
+    const screenY = rect ? e.clientY - rect.top : e.clientY;
+    
+    // Update current user's cursor position for display (use screen coordinates)
+    setCurrentCursorPos({ x: screenX, y: screenY });
+    
+    // Send canvas coordinates to hybrid cursor tracker
     if (cursorTracker) {
-      const canvasX = (e.clientX - transform.x) / transform.scale;
-      const canvasY = (e.clientY - transform.y) / transform.scale;
       cursorTracker.updatePosition({ x: canvasX, y: canvasY });
     }
   };
@@ -69,30 +104,73 @@ export function InfiniteCanvas({ roomId, userId, children, onMouseMove, cursorTr
     if (isPanning) setIsPanning(false);
   };
 
+  const handleMouseLeave = () => {
+    if (isPanning) setIsPanning(false);
+    // Hide current user's cursor when mouse leaves canvas
+    setCurrentCursorPos(null);
+  };
+
   return (
     <div 
       ref={containerRef}
-      className="fixed inset-0 bg-gray-100 overflow-hidden"
+      className="fixed inset-0 bg-gray-100 overflow-hidden infinite-canvas-container"
       style={{ 
-        cursor: isPanning ? 'grabbing' : 'default',
+        cursor: isPanning ? 'grabbing' : 'none', // Hide system cursor
         touchAction: 'none'
       }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       {/* DEBUG INFO */}
       <div className="absolute top-4 left-4 bg-black text-white p-2 rounded text-sm font-mono z-50">
         <div>🔍 Zoom: {(transform.scale * 100).toFixed(1)}%</div>
         <div>📍 Pan: ({Math.round(transform.x)}, {Math.round(transform.y)})</div>
         <div>🖱️ Panning: {isPanning ? 'YES' : 'NO'}</div>
+        <div>👥 Other Cursors: {otherCursors.length}</div>
+        <div>📍 Your Cursor: {currentCursorPos ? `(${Math.round(currentCursorPos.x)}, ${Math.round(currentCursorPos.y)})` : 'None'}</div>
         <div className="mt-2 text-yellow-300">
           <div>🔍 Scroll: Zoom</div>
           <div>📍 Shift+Drag: Pan</div>
         </div>
+        <div className="mt-2 text-green-300">
+          <div>🔗 Connection: {connectionStatus.webrtcConnected ? 'WebRTC' : 'Supabase'}</div>
+          <div>📡 Channels: {connectionStatus.activeChannels}</div>
+          <div>⚡ Latency: {Math.round(connectionStatus.averageLatency)}ms</div>
+        </div>
       </div>
+      
+      {/* CURRENT USER'S CURSOR - Fixed position relative to viewport */}
+      {currentUser && currentCursorPos && (
+        <div
+          className="fixed pointer-events-none"
+          style={{
+            left: `${currentCursorPos.x}px`,
+            top: `${currentCursorPos.y}px`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: 2000 // Higher than everything
+          }}
+        >
+          {/* Cursor Circle with pulse animation */}
+          <div
+            className="w-4 h-4 rounded-full border-2 border-white shadow-lg animate-pulse"
+            style={{ backgroundColor: currentUser.userColor }}
+          />
+          
+          {/* Cursor Label */}
+          <div
+            className="absolute top-6 left-2 px-2 py-1 rounded text-xs whitespace-nowrap shadow-lg font-medium"
+            style={{ 
+              backgroundColor: currentUser.userColor,
+              color: 'white'
+            }}
+          >
+            {currentUser.avatarEmoji} {currentUser.displayName} (You)
+          </div>
+        </div>
+      )}
       
       {/* INFINITE CANVAS CONTENT */}
       <div 
@@ -125,6 +203,37 @@ export function InfiniteCanvas({ roomId, userId, children, onMouseMove, cursorTr
         >
           ∞ CANVAS CENTER ∞
         </div>
+        
+        {/* OTHER USERS' CURSORS - Canvas coordinates */}
+        {otherCursors.map((cursor) => (
+          <div
+            key={cursor.userId}
+            className="absolute pointer-events-none"
+            style={{
+              left: `${cursor.x}px`,
+              top: `${cursor.y}px`,
+              transform: 'translate(-50%, -50%)',
+              zIndex: 1000
+            }}
+          >
+            {/* Cursor Circle */}
+            <div
+              className="w-4 h-4 rounded-full border-2 border-white shadow-lg"
+              style={{ backgroundColor: cursor.userColor }}
+            />
+            
+            {/* Cursor Label */}
+            <div
+              className="absolute top-6 left-2 px-2 py-1 rounded text-xs whitespace-nowrap shadow-lg"
+              style={{ 
+                backgroundColor: cursor.userColor,
+                color: 'white'
+              }}
+            >
+              {cursor.avatarEmoji} {cursor.displayName}
+            </div>
+          </div>
+        ))}
         
         {children}
       </div>

@@ -58,6 +58,7 @@ export interface RoomDetailsResponse {
     userId: string;
     displayName: string;
     userColor: string;
+    avatarEmoji?: string;
     isHost: boolean;
     isOnline: boolean;
   }>;

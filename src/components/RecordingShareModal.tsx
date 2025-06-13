@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { X, Download, Video, Check } from 'lucide-react';
-import { RecordingService } from '../services/recordingService';
+import React from 'react';
+import { X, Download, CheckCircle, Video } from 'lucide-react';
 
 interface RecordingShareModalProps {
   isOpen: boolean;
@@ -8,53 +7,24 @@ interface RecordingShareModalProps {
   recordingBlob: Blob | null;
   recordingUrl: string | null;
   duration: string;
-  sessionId?: string;
 }
 
-export function RecordingShareModal({ 
-  isOpen, 
-  onClose, 
-  recordingBlob, 
-  recordingUrl, 
-  duration,
-  sessionId 
+export function RecordingShareModal({
+  isOpen,
+  onClose,
+  recordingBlob,
+  recordingUrl,
+  duration
 }: RecordingShareModalProps) {
-  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success'>('idle');
+  if (!isOpen || !recordingBlob || !recordingUrl) return null;
 
-  if (!isOpen) return null;
-
-  const handleDownload = async () => {
-    if (recordingUrl && recordingBlob) {
-      setDownloadStatus('downloading');
-      
-      try {
-        const link = document.createElement('a');
-        link.href = recordingUrl;
-        // Generate filename with timestamp for Twitter/X optimization
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        link.download = `screen-recording-${timestamp}.mp4`;
-        
-        // Add to DOM, click, and remove
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Track download in database
-        if (sessionId) {
-          await RecordingService.trackDownload(sessionId);
-        }
-        
-        // Show success feedback
-        setDownloadStatus('success');
-        setTimeout(() => {
-          setDownloadStatus('idle');
-          onClose(); // Auto-close after successful download
-        }, 2000);
-      } catch (error) {
-        console.error('Download failed:', error);
-        setDownloadStatus('idle');
-      }
-    }
+  const handleDownload = () => {
+    const a = document.createElement('a');
+    a.href = recordingUrl;
+    a.download = `recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const formatFileSize = (blob: Blob) => {
@@ -85,17 +55,17 @@ export function RecordingShareModal({
   const twitterInfo = getTwitterOptimizationInfo();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <Video className="w-5 h-5 text-purple-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Recording Complete</h3>
+            <h3 className="font-semibold text-gray-900">Recording Complete</h3>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700"
           >
             <X className="w-5 h-5" />
           </button>
@@ -103,49 +73,43 @@ export function RecordingShareModal({
 
         {/* Content */}
         <div className="p-6">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Video className="w-8 h-8 text-purple-500" />
-            </div>
-            <h4 className="text-lg font-medium text-gray-900 mb-2">
-              Screen recording ready for download!
-            </h4>
-            <p className="text-gray-600 text-sm">
-              Your recording has been optimized and is ready to save.
-            </p>
+          <div className="flex items-center gap-2 text-green-600 mb-4">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-medium">Recording saved as MP4</span>
           </div>
 
+          {/* Video Preview */}
+          <div className="mb-6">
+            <video
+              src={recordingUrl}
+              controls
+              className="w-full h-48 bg-gray-900 rounded-lg object-contain"
+              preload="metadata"
+            />
+          </div>
+          
           {/* Recording Info */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-600">Duration:</span>
-              <span className="text-sm font-medium text-gray-900">{duration}</span>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>• <strong>Format:</strong> MP4 (Twitter optimized)</p>
+              <p>• <strong>Duration:</strong> {duration}</p>
+              <p>• <strong>Quality:</strong> 720p@30fps</p>
+              <p>• <strong>Audio:</strong> 44.1kHz with noise reduction</p>
+              <p>• <strong>File size:</strong> {formatFileSize(recordingBlob)}</p>
             </div>
-            {recordingBlob && (
-              <>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">File size:</span>
-                  <span className="text-sm font-medium text-gray-900">{formatFileSize(recordingBlob)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Format:</span>
-                  <span className="text-sm font-medium text-gray-900">MP4 (H.264)</span>
-                </div>
-              </>
-            )}
           </div>
 
-          {/* Twitter/X Optimization Info */}
+          {/* Twitter Optimization Info */}
           {twitterInfo && (
-            <div className={`rounded-lg p-3 mb-6 border ${
+            <div className={`rounded-lg p-4 mb-6 border ${
               twitterInfo.isOptimalSize 
                 ? 'bg-green-50 border-green-200' 
                 : 'bg-yellow-50 border-yellow-200'
             }`}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-medium">🐦 Social Media Ready</span>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium">🐦 Twitter/X Ready</span>
               </div>
-              <p className={`text-xs ${
+              <p className={`text-sm ${
                 twitterInfo.isOptimalSize ? 'text-green-700' : 'text-yellow-700'
               }`}>
                 {twitterInfo.recommendation}
@@ -156,53 +120,13 @@ export function RecordingShareModal({
             </div>
           )}
 
-          {/* Video Preview */}
-          {recordingUrl && (
-            <div className="mb-6">
-              <video
-                src={recordingUrl}
-                controls
-                className="w-full h-32 bg-gray-900 rounded-lg object-contain"
-                preload="metadata"
-              />
-            </div>
-          )}
-
-          {/* Download Button */}
           <button
             onClick={handleDownload}
-            disabled={downloadStatus === 'downloading'}
-            className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-lg font-medium transition-all ${
-              downloadStatus === 'success'
-                ? 'bg-green-500 text-white'
-                : downloadStatus === 'downloading'
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-purple-500 text-white hover:bg-purple-600 hover:shadow-lg'
-            }`}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
           >
-            {downloadStatus === 'downloading' ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Downloading...</span>
-              </>
-            ) : downloadStatus === 'success' ? (
-              <>
-                <Check className="w-5 h-5" />
-                <span>Downloaded Successfully!</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-5 h-5" />
-                <span>Download Recording</span>
-              </>
-            )}
+            <Download className="w-5 h-5" />
+            Download Recording
           </button>
-
-          {/* Additional Info */}
-          <div className="mt-4 text-xs text-gray-500 text-center">
-            <p>High-quality MP4 recording optimized for social media platforms</p>
-            <p className="mt-1">Ready to upload to Twitter/X, Instagram, TikTok, and more</p>
-          </div>
         </div>
       </div>
     </div>

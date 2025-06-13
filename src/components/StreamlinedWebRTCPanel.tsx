@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, Mic, MicOff, X, Loader2, AlertCircle } from 'lucide-react';
+import { Monitor, X, Loader2, AlertCircle } from 'lucide-react';
 import { displayMediaConstraints } from '../config/webrtcConfig';
 
 interface StreamlinedWebRTCPanelProps {
@@ -18,7 +18,6 @@ export default function StreamlinedWebRTCPanel({
   onScreenShareStateChange 
 }: StreamlinedWebRTCPanelProps) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(false);
   const [isStartingScreenShare, setIsStartingScreenShare] = useState(false);
   const [error, setError] = useState<string>('');
   
@@ -99,16 +98,6 @@ export default function StreamlinedWebRTCPanel({
     
     // TODO: Notify other participants that sharing stopped
     // signalingManagerRef.current?.stopScreenShare();
-  };
-
-  const toggleMicrophone = () => {
-    if (localStreamRef.current) {
-      const audioTracks = localStreamRef.current.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = isMicMuted;
-      });
-    }
-    setIsMicMuted(!isMicMuted);
   };
 
   const handleShareOption = (option: 'tab' | 'window' | 'screen') => {
@@ -201,26 +190,6 @@ export default function StreamlinedWebRTCPanel({
                 playsInline
                 className="w-full h-32 bg-gray-900 rounded-lg object-contain"
               />
-            </div>
-
-            {/* Audio Controls */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50/80 rounded-lg">
-              <button
-                onClick={toggleMicrophone}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors font-medium ${
-                  isMicMuted
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                }`}
-              >
-                {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                <span className="text-sm">{isMicMuted ? 'Unmute' : 'Mute'}</span>
-              </button>
-              
-              <div className="flex-1 text-xs text-gray-600">
-                <div className="font-medium">Audio: {isMicMuted ? 'Muted' : 'Active'}</div>
-                <div>Click to toggle microphone</div>
-              </div>
             </div>
 
             {/* Info Note */}

@@ -96,6 +96,7 @@ Deno.serve(async (req: Request) => {
         userId: p.user_id,
         displayName: p.display_name,
         userColor: p.user_color,
+        avatarEmoji: p.avatar_emoji,
         isHost: p.is_host,
         isOnline: p.is_online
       }))

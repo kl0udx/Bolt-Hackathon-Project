@@ -184,10 +184,8 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
   };
 
   const handleToggleRecording = (duration?: number) => {
-    console.log('RoomView: handleToggleRecording called with duration:', duration);
     if (duration === 0) {
       // Stop recording
-      console.log('RoomView: Stopping recording and timer');
       setIsRecording(false);
       if (durationIntervalRef.current) {
         window.clearInterval(durationIntervalRef.current);
@@ -196,15 +194,13 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
       setRecordingDuration(0);
     } else if (duration === 1) {
       // Start recording
-      console.log('RoomView: Starting recording and timer');
       setIsRecording(true);
       setRecordingDuration(0); // Reset duration when starting
       if (!durationIntervalRef.current) {
-        console.log('RoomView: Setting up timer interval');
         durationIntervalRef.current = window.setInterval(() => {
           setRecordingDuration(prev => {
-            console.log('RoomView: Timer tick, new duration:', prev + 1);
-            return prev + 1;
+            const newDuration = prev + 1;
+            return newDuration;
           });
         }, 1000);
       }
@@ -214,7 +210,6 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
   // Add cleanup effect for recording timer
   useEffect(() => {
     return () => {
-      console.log('RoomView: Cleaning up timer on unmount');
       if (durationIntervalRef.current) {
         window.clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = undefined;
@@ -224,7 +219,6 @@ export function RoomView({ roomCode, userId, onLeaveRoom }: RoomViewProps) {
 
   // Add cleanup when recording modal is closed
   const handleRecordingModalClose = () => {
-    console.log('RoomView: Cleaning up timer on modal close');
     if (durationIntervalRef.current) {
       window.clearInterval(durationIntervalRef.current);
       durationIntervalRef.current = undefined;
